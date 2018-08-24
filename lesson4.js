@@ -1,4 +1,4 @@
-// https://github.com/alsotang/node-lessons/tree/master/lesson5
+// https://github.com/alsotang/node-lessons/tree/master/lesson4
 const url = require('url');
 
 // eventproxy处理并发请求
@@ -8,7 +8,6 @@ const eventproxy = require('eventproxy');
 const superagent = require('superagent');
 const cheerio = require('cheerio');
 const express = require('express');
-const async = require("async");
 
 const app = new express();
 
@@ -19,7 +18,7 @@ app.get('/', function(req, res, next) {
 		.end(function (err, sres) {
 			if (err) {
 				throw err;
-			}
+            }
 			let $ = cheerio.load(sres.text);
 			let topicUrls = [];
 			$('#topic_list .topic_title').each(function(idx, element) {
@@ -31,43 +30,30 @@ app.get('/', function(req, res, next) {
                 let href = url.resolve(cnodeUrl, $element.attr('href'));
                 topicUrls.push(href);
             });
-            // console.log(topicUrls);
+            console.log(topicUrls);
             let ep = new eventproxy();
             ep.after('topic_html', topicUrls.length, function (topics) {
                 // 在所有文件的异步执行结束后将被执行
                 // 所有文件的内容都存在list数组中
                 let result = topics.map(topic => {
                     let $t = cheerio.load(topic[1]);
+                    // console.log($t('.topic_full_title'));
                     return ({
                         title: $t('.topic_full_title').text().trim(),
                         href: topic[0],
                         comment1: $t('.reply_content').eq(0).text().trim(),
                     });
                 });
-                console.log(result);
+                // console.log(result);
                 res.send(result);
             });
-            
-            // ...or ES2017 async functions
-            async.mapLimit(topicUrls, 5, function(url) {
-                
-            }, (err, results) => {
-                if (err) throw err;
-                // results is now an array of the response bodies
-                console.log(err);
-                console.log(results);
+            topicUrls.forEach(function (topicUrl) {
+                superagent.get(topicUrl)
+                .end(function (err, res) {
+                    // console.log('fetch ' + topicUrl + ' successful');
+                    ep.emit('topic_html', [topicUrl, res.text]);
+                });
             });
-
-            function fetch(url, callback) {
-                superagent.get(url)
-                    .end(function (err, topicSres) {
-                        if (err) {
-                            throw err;
-                        }
-                        console.log(url);
-                        ep.emit('topic_html', [url, topicSres.text]);
-                    })
-            }
 		});
 });
 
